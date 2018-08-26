@@ -103,6 +103,10 @@ class Build : NukeBuild
     
     Target Pack => _ => _
         .DependsOn(Compile)
+        .OnlyWhen(    
+            () => GitRepository.Branch.EqualsOrdinalIgnoreCase(MasterBranch), 
+            () => GitRepository.Branch.EqualsOrdinalIgnoreCase(DevelopBranch)
+        )
         .Executes(() =>
         {
             DotNetPack(s => s
@@ -117,9 +121,9 @@ class Build : NukeBuild
     Target Push => _ => _
         .DependsOn(Pack, Test)
         .OnlyWhen(    
-                () => GitRepository.Branch.EqualsOrdinalIgnoreCase(MasterBranch), 
-                () => GitRepository.Branch.EqualsOrdinalIgnoreCase(DevelopBranch)
-            )
+            () => GitRepository.Branch.EqualsOrdinalIgnoreCase(MasterBranch), 
+            () => GitRepository.Branch.EqualsOrdinalIgnoreCase(DevelopBranch)
+        )
         .Requires(() => ApiKey) 
         .Requires(() => GitStatus())
         .Requires(() => Configuration.EqualsOrdinalIgnoreCase("release"))
