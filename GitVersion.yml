@@ -1,0 +1,11 @@
+assembly-versioning-scheme: MajorMinor
+mode: ContinuousDelivery
+
+branches:
+  master:
+    tag: ''
+  develop:
+    tag: 'dev'
+
+ignore:
+  sha: []

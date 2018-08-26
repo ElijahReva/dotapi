@@ -1,0 +1,42 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>netcoreapp2.1</TargetFramework>
+        <NoWarn>FS2003</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+
+        <None Include="TestFs\TestFs.fsproj">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
+        <None Include="TestFs\TestFs.fs">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Include="TestCs\TestClass.cs">
+          <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
+        <None Include="TestCs\TestCs.csproj">
+          <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
+        <Compile Include="DescribeIntegrationTests.fs" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="coverlet.msbuild" Version="2.2.1">
+        <PrivateAssets>all</PrivateAssets>
+        <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+      </PackageReference>
+      <PackageReference Include="FsUnit.xUnit" Version="3.2.0" />
+      <PackageReference Include="xunit.runner.visualstudio" Version="2.4.0" />
+    </ItemGroup>
+    <ItemGroup>
+      <None Include="BadInput.json">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </None>
+    </ItemGroup>
+    <ItemGroup>
+      <ProjectReference Include="..\src\dotapi\dotapi.fsproj" />
+    </ItemGroup>
+
+</Project>

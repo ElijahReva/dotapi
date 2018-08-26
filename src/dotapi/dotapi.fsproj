@@ -1,0 +1,28 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <PackAsTool>true</PackAsTool>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>netcoreapp2.1</TargetFramework>
+        <RootNamespace>dotapi</RootNamespace>
+        <AssemblyName>dotapi</AssemblyName>
+        <PackageId>dotapi</PackageId>
+        <Description>Command line tool to extract public contract definition from any netstandart2.0 assembly.</Description>
+        <NoWarn>FS2003</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Compile Include="Tool.fs" />
+        <Compile Include="Program.fs" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Argu" Version="5.1.0" />
+      <PackageReference Include="Serilog.Sinks.Console" Version="3.1.1" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\dotapi.Generator\dotapi.Generator.csproj" />
+    </ItemGroup>
+
+</Project>

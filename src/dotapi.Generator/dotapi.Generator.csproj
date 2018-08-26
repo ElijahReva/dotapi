@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>netcoreapp2.1</TargetFramework>
+        <NoWarn>FS2003</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="PublicApiGenerator" Version="8.0.0" />
+    </ItemGroup>
+
+</Project>
