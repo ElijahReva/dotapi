@@ -1,2 +1,0 @@
-build:
-  - ps: build.ps1
