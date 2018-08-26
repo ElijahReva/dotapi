@@ -1,0 +1,9 @@
+
+[assembly: System.Runtime.Versioning.TargetFrameworkAttribute(".NETCoreApp,Version=v2.1", FrameworkDisplayName="")]
+namespace PublicApiGenerator
+{
+    public class static ApiGenerator
+    {
+        public static string GeneratePublicApi(System.Reflection.Assembly assemby, System.Type[] includeTypes = null, bool shouldIncludeAssemblyAttributes = True, string[] whitelistedNamespacePrefixes = null, string[] excludeAttributes = null) { }
+    }
+}

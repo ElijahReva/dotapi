@@ -12,6 +12,7 @@ open System.IO
 open Serilog.Core
 open dotapi
 open Microsoft.FSharp.Quotations
+open Serilog.Events
 open System.Diagnostics
 open System.Runtime.CompilerServices
 
@@ -99,13 +100,13 @@ type FolderTestCases() =
 type DescribeIntegrationTests() =                
     let describe = TestHelper.nameof <@ Args.Describe @>     
     let fileNotEmpty = File.ReadAllText >> should not' (be NullOrEmptyString)
-    
+    let logLevel = new LoggingLevelSwitch(LogEventLevel.Debug)
     let main argv =
         let prepend a b = Array.append b a
         describe 
         |> Array.singleton
         |> prepend argv
-        |> Program.mainUnsafeWith ignore
+        |> Program.mainUnsafeWith (fun l -> logLevel.MinimumLevel <- l)
     
     
     member this.CreateOutFileName(file: string, [<CallerMemberName>] ?memberName: string) =
@@ -147,6 +148,19 @@ type DescribeIntegrationTests() =
     member this.``bad file`` () =
         let input = "BadInput.json"
         let act: Action = new Action(fun () -> main [|input|] |> ignore)
+        Assert.Throws(typeof<BadImageFormatException>, act)     
+                               
+    [<Theory(Skip = "Not implemented")>]
+    [<InlineData("-v")>]
+    [<InlineData("--verbose")>]
+    member this.``verbose log level`` verboseFlag =        
+        let act: Action = new Action(fun () -> main [| verboseFlag |] |> ignore)
+        Assert.Throws(typeof<BadImageFormatException>, act)
+        
+    [<Fact>]
+    member this.``quiet log level`` () =
+        let input = "BadInput.json"
+        let act: Action = new Action(fun () -> main [|input|] |> ignore)
         Assert.Throws(typeof<BadImageFormatException>, act)
 
 type DotApiIntegrationTests() =    
@@ -154,8 +168,11 @@ type DotApiIntegrationTests() =
     
     [<Fact>]
     member this.``version`` () =
-        "version"
-        |> Array.singleton
-        |> main
-        |> should not' (be NullOrEmptyString)
+        let result = 
+            "version"
+            |> Array.singleton
+            |> main
+            
+        result |> should not' (be NullOrEmptyString)
+        result |> should not' (equal "0.0.0.0")
         
