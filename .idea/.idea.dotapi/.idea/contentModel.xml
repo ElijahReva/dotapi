@@ -15,7 +15,6 @@
     <e p="E:\work\dotapi" t="IncludeFlat">
       <e p=".nuke" t="Include" />
       <e p=".travis.yml" t="Include" />
-      <e p="appveyor.yml" t="Include" />
       <e p="build" t="IncludeRecursive">
         <e p="bin" t="ExcludeRecursive" />
         <e p="Build.cs" t="Include" />
