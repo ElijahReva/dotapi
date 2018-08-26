@@ -35,9 +35,9 @@ with
 [<CliPrefix(CliPrefix.None)>]
 type Args =
     | Describe of ParseResults<DescribeArgs>
-    | Version  
     | [<Inherit; CliPrefix(CliPrefix.DoubleDash); AltCommandLine("-q")>] Quiet  
-    | [<Inherit; CliPrefix(CliPrefix.DoubleDash); AltCommandLine("-v")>] Verbose  
+    | [<Inherit; CliPrefix(CliPrefix.DoubleDash); AltCommandLine("-v")>] Verbose    
+    | [<Inherit>] Version    
         
 with
     interface IArgParserTemplate with
@@ -47,27 +47,7 @@ with
             | Version -> "Current version"
             | Quiet -> "Single result line in output"
             | Verbose -> "More logs in output"
-
-module Logger =
-    open Argu
-    open Serilog.Events
-        
-    let private createLogger lvl =
-        Log.Logger <- 
-            (LoggerConfiguration())
-                .MinimumLevel.Is(lvl)
-                .WriteTo.Console()
-                .CreateLogger()
-                
-    let CreateLogger (parsed : ParseResults<Args>)  = 
-        // let lvl = parsed.GetResult(LogEventLevel)
-        let lvl = LogEventLevel.Debug
-        createLogger lvl    
             
-
-
-
-
 module Api = 
     open System
     open System.Collections.Generic
@@ -134,18 +114,21 @@ module Api =
         binaries |> processMany outputPath                
         outputPath        
                
-    let private Main (describe: ParseResults<Args>) = "Not implemented"
+    let private Main (describe: ParseResults<Args>) =
+        "Not implemented"
     
     let private getVersion () = 
         Assembly
             .GetAssembly(typeof<Args>)
-            .GetName()
-            .Version 
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+            .InformationalVersion
         |> string
         
-    let run (parseResults: ParseResults<Args>) = 
-        match parseResults.TryGetSubCommand() with 
-        | Some (Describe args) -> Describe args     
-        | Some (Version) -> getVersion()     
-        | _ -> Main parseResults
-                           
+    let run (parseResults: ParseResults<Args>) =
+        if parseResults.Contains <@ Args.Version @> then
+            getVersion()
+        else 
+            match parseResults.TryGetSubCommand() with 
+            | Some (Describe args) -> Describe args 
+            | _ -> Main parseResults
+                                       
