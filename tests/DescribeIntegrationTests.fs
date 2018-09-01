@@ -94,23 +94,13 @@ type TestCases() =
         yield [| csTc() |]                        
     })
 
-type DescribeIntegrationTests() =                
-    let describe = nameof <@ Args.Describe @>     
+type DescribeIntegrationTests() =
     let fileNotEmpty = File.ReadAllText >> should not' (be NullOrEmptyString)
     let logLevel = new LoggingLevelSwitch(LogEventLevel.Debug)
-    let mainc argv =
-        let prepend a b = Array.append b a
-        describe 
-        |> Array.singleton
-        |> prepend argv
+    let describe argv =        
+        argv
+        |> Array.append [| nameof <@ Args.Describe @> |] 
         |> Program.mainUnsafeWith (fun l -> logLevel.MinimumLevel <- l)
-    
-    static member BinaryTestCases 
-        with get() : obj array seq = 
-            [|
-                [| fsTc() :> obj |]                  
-                [| csTc() :> obj |]
-            |] |> Array.toSeq
         
         
     member this.CreateOutFileName(file: string, [<CallerMemberName>] ?memberName: string) =
@@ -125,58 +115,70 @@ type DescribeIntegrationTests() =
         | _ -> failwith "WTF"
                     
     [<Theory>]
-    [<MemberData("BinaryTestCases")>]    
-    member this.``binary with output`` binary =
-        let file = binary |> getFileFullPath
-        let resultFile = this.CreateOutFileName(file)
+    [<ClassData(typeof<TestCases>)>]     
+    member this.``binary with file output should not throw`` tc =
+        let file = tc |> getFileFullPath
+        let resultFile = this.CreateOutFileName(file)     
         [| 
            file
            "-o"; resultFile
-        |] |> mainc |> fileNotEmpty
+        |] |> describe |> should not' (be NullOrEmptyString)
+                               
+    [<Theory>]
+    [<ClassData(typeof<TestCases>)>]     
+    member this.``binary with not existent directory output should not throw`` tc =
+        let file = tc |> getFileFullPath
+        let resultDirectory = "./TestResult/"
+        if Directory.Exists resultDirectory then Directory.Delete (resultDirectory, true)   
+        [| 
+           file
+           "-o"; resultDirectory
+        |] |> describe |> should not' (be NullOrEmptyString)      
+        
             
     [<Theory>]
     [<ClassData(typeof<TestCases>)>]    
-    member this.``binary without output`` tc = tc |> getFileFullPath |> Array.singleton |> mainc |> fileNotEmpty
+    member this.``binary without output`` tc = tc |> getFileFullPath |> Array.singleton |> describe |> should not' (be NullOrEmptyString)
             
                   
-    [<Theory(Skip="Not impl")>]
+    [<Theory(Skip = "Detect project file feature")>]
     [<ClassData(typeof<TestCases>)>]      
-    member this.``no input`` folder =
+    member this.``no input`` testCase =
         let cd = Directory.GetCurrentDirectory()
         try     
-            folder |> Directory.SetCurrentDirectory
-            mainc [| |] |> fileNotEmpty
+            testCase.folder |> Directory.SetCurrentDirectory
+            describe [| |] |> should not' (be NullOrEmptyString)
         finally 
             Directory.SetCurrentDirectory cd 
                             
     [<Fact>]
     member this.``bad file`` () =
         let input = "BadInput.json"
-        let act: Action = new Action(fun () -> mainc [|input|] |> ignore)
+        let act: Action = new Action(fun () -> describe [|input|] |> ignore)
         Assert.Throws(typeof<BadImageFormatException>, act)     
                                
     [<Theory(Skip = "Not implemented")>]
     [<InlineData("-v")>]
     [<InlineData("--verbose")>]
     member this.``verbose log level`` verboseFlag =        
-        let act: Action = new Action(fun () -> mainc [| verboseFlag |] |> ignore)
+        let act: Action = new Action(fun () -> describe [| verboseFlag |] |> ignore)
         Assert.Throws(typeof<BadImageFormatException>, act)
         
     [<Fact>]
     member this.``quiet log level`` () =
         let input = "BadInput.json"
-        let act: Action = new Action(fun () -> mainc [|input|] |> ignore)
+        let act: Action = new Action(fun () -> describe [|input|] |> ignore)
         Assert.Throws(typeof<BadImageFormatException>, act)
 
 type DotApiIntegrationTests() =    
-    let mainc = Program.mainUnsafeWith ignore
+    let describe = Program.mainUnsafeWith ignore
     
     [<Fact>]
     member this.``version`` () =
         let result = 
             "version"
             |> Array.singleton
-            |> mainc
+            |> describe
             
         result |> should not' (be NullOrEmptyString)
         result |> should not' (equal "0.0.0.0")

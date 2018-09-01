@@ -1,0 +1,21 @@
+---TestCs---[assembly: System.Runtime.Versioning.TargetFrameworkAttribute(".NETCoreApp,Version=v2.1", FrameworkDisplayName="")]
+namespace TestNamespace
+{
+    public interface ITestInterface<out TOut, in TIn>
+    {
+        TOut TestTOut(TIn testTin);
+    }
+    public class TestClass : TestNamespace.ITestInterface<string, long>
+    {
+        public TestClass() { }
+        public static void TestStatic() { }
+        public string TestTOut(long testTin) { }
+    }
+}---dotapi.Generator---[assembly: System.Runtime.Versioning.TargetFrameworkAttribute(".NETCoreApp,Version=v2.1", FrameworkDisplayName="")]
+namespace PublicApiGenerator
+{
+    public class static ApiGenerator
+    {
+        public static string GeneratePublicApi(System.Reflection.Assembly assemby, System.Type[] includeTypes = null, bool shouldIncludeAssemblyAttributes = True, string[] whitelistedNamespacePrefixes = null, string[] excludeAttributes = null) { }
+    }
+}

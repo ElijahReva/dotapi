@@ -1,0 +1,14 @@
+[assembly: System.Runtime.Versioning.TargetFrameworkAttribute(".NETCoreApp,Version=v2.1", FrameworkDisplayName="")]
+namespace TestNamespace
+{
+    public interface ITestInterface<out TOut, in TIn>
+    {
+        TOut TestTOut(TIn testTin);
+    }
+    public class TestClass : TestNamespace.ITestInterface<string, long>
+    {
+        public TestClass() { }
+        public static void TestStatic() { }
+        public string TestTOut(long testTin) { }
+    }
+}
