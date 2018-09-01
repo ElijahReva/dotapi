@@ -117,12 +117,11 @@ module Api =
     let private Main (describe: ParseResults<Args>) =
         "Not implemented"
     
-    let private getVersion () = 
-        Assembly
-            .GetAssembly(typeof<Args>)
-            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
-            .InformationalVersion
-        |> string
+    let private getVersion () =
+        let attribute = Assembly.GetAssembly(typeof<Args>).GetCustomAttribute<AssemblyInformationalVersionAttribute>()  
+        match attribute with 
+        | null -> "Develop"
+        | x -> x.InformationalVersion
         
     let run (parseResults: ParseResults<Args>) =
         if parseResults.Contains <@ Args.Version @> then
