@@ -103,10 +103,6 @@ class Build : NukeBuild
     
     Target Pack => _ => _
         .DependsOn(Compile)
-        .OnlyWhen(    
-            () => GitRepository.Branch.EqualsOrdinalIgnoreCase(MasterBranch), 
-            () => GitRepository.Branch.EqualsOrdinalIgnoreCase(DevelopBranch)
-        )
         .Executes(() =>
         {
             DotNetPack(s => s

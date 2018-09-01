@@ -10,7 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Nuke.Common" Version="0.6.2" />
+    <PackageReference Include="Nuke.Common" Version="0.7.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -25,7 +25,6 @@
     <None Include="..\global.json" Condition="Exists('..\global.json')" />
     <None Include="..\nuget.config" Condition="Exists('..\nuget.config')" />
     <None Include="..\Jenkinsfile" Condition="Exists('..\Jenkinsfile')" />
-    <None Include="..\appveyor.yml" Condition="Exists('..\appveyor.yml')" />
     <None Include="..\.travis.yml" Condition="Exists('..\.travis.yml')" />
     <None Include="..\GitVersion.yml" Condition="Exists('..\GitVersion.yml')" />
   </ItemGroup>
