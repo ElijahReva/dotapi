@@ -79,8 +79,14 @@ module TestHelper =
     
     let getDirectoryFullPath tc = DirectoryInfo(tc.folder).FullName
     
-    let fsTc() = { folder = "TestFs"; name = "TestFs.dll" }
-    let csTc() = { folder = "TestCs"; name = "TestCs.dll" }
+    let private a = { folder = "TestFs"; name = "TestFs.dll" }
+    let private b = { folder = "TestCs"; name = "TestCs.dll" }
+    
+    buildFromFolder printer a |> ignore
+    buildFromFolder printer b |> ignore
+     
+    let fsTc() = a
+    let csTc() = b
  
 type BaseTestCase(generator : obj array seq) =
     interface obj array seq with
@@ -101,8 +107,7 @@ type DescribeIntegrationTests() =
         argv
         |> Array.append [| nameof <@ Args.Describe @> |] 
         |> Program.mainUnsafeWith (fun l -> logLevel.MinimumLevel <- l)
-        
-        
+    
     member this.CreateOutFileName(file: string, [<CallerMemberName>] ?memberName: string) =
         let replace (o: char) n (str: string) = str.Replace(o, n)
         match memberName with
