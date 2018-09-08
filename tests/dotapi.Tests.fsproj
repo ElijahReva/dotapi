@@ -3,6 +3,7 @@
     <PropertyGroup>
         <TargetFramework>netcoreapp2.1</TargetFramework>
         <NoWarn>FS2003</NoWarn>
+        <OutputType>Library</OutputType>
     </PropertyGroup>
 
     <ItemGroup>

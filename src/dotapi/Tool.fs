@@ -15,6 +15,13 @@ open Serilog.Events
 
 [<AutoOpen>]
 module Helper =
+    
+    let ensureDirectory path = 
+        if not (Directory.Exists path) then Directory.CreateDirectory(path) else (DirectoryInfo path) 
+        |> (fun x -> x.FullName) 
+        
+    let inline pathCombine child parrent = Path.Combine(parrent, child)
+    
     let collectWith splitter (str: string seq) =        
         ((StringBuilder(), str) 
         ||> Seq.fold (fun sb (str : string) -> sb.AppendFormat("{0}{1}", str, splitter)))
@@ -23,21 +30,23 @@ module Helper =
 
 [<CliPrefix(CliPrefix.Dash)>]
 type DescribeArgs =
-    | [<MainCommand>] Binaries of files : string list
-    | [<AltCommandLine("-o")>] Output of filePath: string
+    | [<MainCommand>]                           Input    of files : string list
+    | [<AltCommandLine("-o")>]                  Output   of filePath: string
+    | [<AltCommandLine("-d")>]                  Details
 with
     interface IArgParserTemplate with
         member s.Usage =
             match s with
-            | Binaries _ -> "Files to analyze"
-            | Output _ ->  "Output file"
+            | Input _  -> "Binary files, project files or folders with project to analyze"
+            | Output _ -> "Output file or directory"
+            | Details  -> "Separate api description file per input item."
             
-[<CliPrefix(CliPrefix.None)>]
+[<CliPrefix(CliPrefix.DoubleDash)>]
 type Args =
-    | Describe of ParseResults<DescribeArgs>
-    | Version  
-    | [<Inherit; CliPrefix(CliPrefix.DoubleDash); AltCommandLine("-q")>] Quiet  
-    | [<Inherit; CliPrefix(CliPrefix.DoubleDash); AltCommandLine("-v")>] Verbose  
+    | [<CliPrefix(CliPrefix.None)>]             Describe of ParseResults<DescribeArgs>
+    | [<Inherit; AltCommandLine("-q")>]         Quiet  
+    | [<Inherit; AltCommandLine("-v")>]         Verbose    
+    | [<Inherit; CliPrefix(CliPrefix.None)>]    Version    
         
 with
     interface IArgParserTemplate with
@@ -47,33 +56,22 @@ with
             | Version -> "Current version"
             | Quiet -> "Single result line in output"
             | Verbose -> "More logs in output"
-
-module Logger =
-    open Argu
-    open Serilog.Events
-        
-    let private createLogger lvl =
-        Log.Logger <- 
-            (LoggerConfiguration())
-                .MinimumLevel.Is(lvl)
-                .WriteTo.Console()
-                .CreateLogger()
-                
-    let CreateLogger (parsed : ParseResults<Args>)  = 
-        // let lvl = parsed.GetResult(LogEventLevel)
-        let lvl = LogEventLevel.Debug
-        createLogger lvl    
             
-
-
-
-
 module Api = 
     open System
-    open System.Collections.Generic
     open System
+    open PublicApiGenerator
+    open System
+    open System.Collections.Generic  
     
     let [<Literal>] private DefaultOutputFile = "api.txt"
+     
+    type private Result = 
+        {
+            Name: string
+            Content: string
+        }
+    type private Writer = Result -> string
     
     let private fileExist path =
         if File.Exists path then
@@ -100,52 +98,110 @@ module Api =
             with 
             | :? BadImageFormatException as biex ->
                 logError biex "NotAnDotnetDll" path
-                reraise()                
+                reraise()               
             | :? FileLoadException as flex -> 
                 logError flex "AssemblyAlreadyLoaded" path
-                reraise() 
+                reraise()
                 
         
         filterExitance 
         >> Option.bind filterAssembly
     
-    let private generateDescription path = 
-        path 
-        |> AssemblyLoadContext.Default.LoadFromAssemblyPath
-        |> ApiGenerator.GeneratePublicApi 
+    let private generate : Assembly -> Result = 
+        fun path -> 
+            let name = Path.GetFileNameWithoutExtension(path.Location)
+            { 
+                Name = name
+                Content = ApiGenerator.GeneratePublicApi path
+            }            
     
-    let private processManyUsing saver =
+    let private processUsing (writer: Writer) =
         List.choose filterBinaries
-        >> List.map ApiGenerator.GeneratePublicApi
-        >> List.iter saver    
+        >> List.map generate
+        >> List.map writer    
         
     let private AsSingleFile path = 
         File.Delete(path)
-        fun file -> 
+        fun content -> 
             File.AppendAllText(path, Environment.NewLine)
-            File.AppendAllText(path, file)  
-                
-    let private processMany path = processManyUsing (AsSingleFile path)
-        
+            File.AppendAllText(path, content) 
+            path 
+            
+    let private AsManyFiles path = 
+        fun content ->            
+            File.Delete(path)
+            File.WriteAllText(path, content)
+            path                         
     
-    let private Describe  (describe: ParseResults<DescribeArgs>) =            
-        let binaries = describe.GetResult (<@ DescribeArgs.Binaries @>)
-        let outputPath = describe.GetResult(DescribeArgs.Output, DefaultOutputFile)
-        binaries |> processMany outputPath                
-        outputPath        
+    let private (|Folder|_|) (input: string) =
+        let path = Path.GetFullPath(input)
+        let chToStr ch = string ch    
+        if path.EndsWith(chToStr Path.DirectorySeparatorChar) || 
+           path.EndsWith(chToStr Path.AltDirectorySeparatorChar) then 
+            Some input
+        else
+            None 
+    
+          
+    let private WriteToFile isMany (path: string) : Writer =
+        match isMany with 
+        | true ->
+            let fileName = Path.GetFileName(path)
+            let directory = Path.GetDirectoryName(path)
+            let factory name = Path.Combine(directory, (sprintf "%s.%s") name fileName) 
+            fun (res: Result) -> 
+                let path = factory res.Name
+                if File.Exists path then File.Delete path
+                let path = FileInfo(path).FullName
+                File.WriteAllText(path, res.Content)
+                path 
+        | false ->
+             if File.Exists path then File.Delete path
+             let path = FileInfo(path).FullName
+             fun (res: Result) ->
+                 File.AppendAllText(path, "---")
+                 File.AppendAllText(path, res.Name)
+                 File.AppendAllText(path, "---")
+                 File.AppendAllText(path, res.Content)
+                 path + " --- " + res.Name
+                       
+    let private createWriter isMany output  : Writer =    
+        match output with 
+        | Folder folderPath ->
+            folderPath 
+            |> ensureDirectory
+            |> pathCombine DefaultOutputFile          
+            |> WriteToFile isMany            
+        | filePath ->
+            filePath             
+            |> WriteToFile isMany 
+                            
+    
+    let private Describe  (describe: ParseResults<DescribeArgs>) =
+        let writer =
+            (
+                describe.Contains(<@ DescribeArgs.Details @>),
+                describe.GetResult(<@ DescribeArgs.Output @>, DefaultOutputFile)
+            ) ||> createWriter
+            
+        describe.GetResult(<@ DescribeArgs.Input @>, [Environment.CurrentDirectory])
+        |> processUsing writer
+        |> collectWith Environment.NewLine    
                
-    let private Main (describe: ParseResults<Args>) = "Not implemented"
+    let private Main (describe: ParseResults<Args>) =
+        "Not implemented"
     
-    let private getVersion () = 
-        Assembly
-            .GetAssembly(typeof<Args>)
-            .GetName()
-            .Version 
-        |> string
+    let private Version =
+        let attribute = Assembly.GetAssembly(typeof<Args>).GetCustomAttribute<AssemblyInformationalVersionAttribute>()  
+        match attribute with 
+        | null -> "Develop"
+        | x -> x.InformationalVersion
         
-    let run (parseResults: ParseResults<Args>) = 
-        match parseResults.TryGetSubCommand() with 
-        | Some (Describe args) -> Describe args     
-        | Some (Version) -> getVersion()     
-        | _ -> Main parseResults
-                           
+    let run (parseResults: ParseResults<Args>) =
+        if parseResults.Contains <@ Args.Version @> then
+            Version
+        else 
+            match parseResults.TryGetSubCommand() with 
+            | Some (Describe args) -> Describe args 
+            | _ -> Main parseResults
+                                       

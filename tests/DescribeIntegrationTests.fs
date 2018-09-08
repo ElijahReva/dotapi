@@ -12,13 +12,15 @@ open System.IO
 open Serilog.Core
 open dotapi
 open Microsoft.FSharp.Quotations
+open Serilog.Events
 open System.Diagnostics
 open System.Runtime.CompilerServices
 
+[<AutoOpen>]
 module TestHelper =
     
     let private any<'R> : 'R = failwith "!"
-    let private runProc filename args startDir = 
+    let private runProc printer filename args startDir = 
         let timer = Stopwatch.StartNew()
         let procStartInfo = 
             ProcessStartInfo(
@@ -44,70 +46,63 @@ module TestHelper =
                 reraise()
         if not started then
             failwithf "Failed to start process %s" filename
-        printfn "Started %s with pid %i" p.ProcessName p.Id
+        sprintf "Started %s with pid %i" p.ProcessName p.Id |> printer
         p.BeginOutputReadLine()
         p.BeginErrorReadLine()
         p.WaitForExit()
         timer.Stop()
-        printfn "Finished %s after %A milliseconds" filename timer.ElapsedMilliseconds
+        sprintf "Finished %s after %A milliseconds" filename timer.ElapsedMilliseconds |> printer
         let cleanOut l = l |> Seq.filter (fun o -> String.IsNullOrEmpty o |> not)
         cleanOut outputs, cleanOut errors
     
-    type private Input = { folder: string; name: string }
+    type Input = { folder: string; name: string }
     
-    let private buildFromFolder input =
-        let (_, err) = input.folder |> Some |> runProc "dotnet" "build -o ./"
+    let private buildFromFolder printer input =
+        let (_, err) = input.folder |> Some |> runProc printer "dotnet" "build -o ./"
         let a = err |> Seq.length 
         a |> should equal 0        
         let outFile = Path.Combine(input.folder, input.name) |> FileInfo
         outFile.Exists |> should equal true
         outFile.FullName
-        
-    let private csFolder = "TestCs"
-    let private fsFolder = "TestFs"
     
-    let csFile()  = { folder = csFolder; name = "TestCs.dll" } |> buildFromFolder
-    let fsFile()  = { folder = fsFolder; name = "TestFs.dll" } |> buildFromFolder
-    
-    let CsFolder()  = DirectoryInfo(csFolder).FullName
-    let FsFolder()  = DirectoryInfo(fsFolder).FullName
+    let private printer = (fun s -> Debug.Print(s))    
     
     let nameof (q:Expr<_>) = 
           match q with 
           | DerivedPatterns.Lambdas(_, Patterns.NewUnionCase(a, b)) -> a.Name |> (fun x -> x.ToLowerInvariant())  
           | _ -> failwith "Unexpected format"
-        
+    
+    let getFileFullPath tc =
+        let outFile = Path.Combine(tc.folder, tc.name) |> FileInfo
+        outFile.Exists |> should equal true
+        outFile.FullName
+    
+    let getDirectoryFullPath tc = DirectoryInfo(tc.folder).FullName
+    
+    let fsTc() = { folder = "TestFs"; name = "TestFs.dll" }
+    let csTc() = { folder = "TestCs"; name = "TestCs.dll" }
  
 type BaseTestCase(generator : obj array seq) =
     interface obj array seq with
         member this.GetEnumerator() = generator.GetEnumerator()
         member this.GetEnumerator() = 
-            generator.GetEnumerator() :> System.Collections.IEnumerator 
-   
-type BinaryTestCases() =
+            generator.GetEnumerator() :> System.Collections.IEnumerator
+
+type TestCases() =
     inherit BaseTestCase(seq {   
-        yield [| TestHelper.csFile() |]                        
-        yield [| TestHelper.fsFile() |]                        
-    })
-    
-type FolderTestCases() =
-    inherit BaseTestCase(seq {   
-        yield [| TestHelper.CsFolder() |]                        
-        yield [| TestHelper.FsFolder() |]                        
+        yield [| fsTc() |]                        
+        yield [| csTc() |]                        
     })
 
-type DescribeIntegrationTests() =                
-    let describe = TestHelper.nameof <@ Args.Describe @>     
+type DescribeIntegrationTests() =
     let fileNotEmpty = File.ReadAllText >> should not' (be NullOrEmptyString)
-    
-    let main argv =
-        let prepend a b = Array.append b a
-        describe 
-        |> Array.singleton
-        |> prepend argv
-        |> Program.mainUnsafeWith ignore
-    
-    
+    let logLevel = new LoggingLevelSwitch(LogEventLevel.Debug)
+    let describe argv =        
+        argv
+        |> Array.append [| nameof <@ Args.Describe @> |] 
+        |> Program.mainUnsafeWith (fun l -> logLevel.MinimumLevel <- l)
+        
+        
     member this.CreateOutFileName(file: string, [<CallerMemberName>] ?memberName: string) =
         let replace (o: char) n (str: string) = str.Replace(o, n)
         match memberName with
@@ -120,42 +115,71 @@ type DescribeIntegrationTests() =
         | _ -> failwith "WTF"
                     
     [<Theory>]
-    [<ClassData(typeof<BinaryTestCases>)>]    
-    member this.``binary with output`` binary =
-        let resultFile = this.CreateOutFileName(binary)
+    [<ClassData(typeof<TestCases>)>]     
+    member this.``binary with file output should not throw`` tc =
+        let file = tc |> getFileFullPath
+        let resultFile = this.CreateOutFileName(file)     
         [| 
-           binary
+           file
            "-o"; resultFile
-        |] |> main |> fileNotEmpty
+        |] |> describe |> should not' (be NullOrEmptyString)
+                               
+    [<Theory>]
+    [<ClassData(typeof<TestCases>)>]     
+    member this.``binary with not existent directory output should not throw`` tc =
+        let file = tc |> getFileFullPath
+        let resultDirectory = "./TestResult/"
+        if Directory.Exists resultDirectory then Directory.Delete (resultDirectory, true)   
+        [| 
+           file
+           "-o"; resultDirectory
+        |] |> describe |> should not' (be NullOrEmptyString)      
+        
             
     [<Theory>]
-    [<ClassData(typeof<BinaryTestCases>)>]    
-    member this.``binary without output`` binary = binary |> Array.singleton |> main |> fileNotEmpty
+    [<ClassData(typeof<TestCases>)>]    
+    member this.``binary without output`` tc = tc |> getFileFullPath |> Array.singleton |> describe |> should not' (be NullOrEmptyString)
             
                   
-    [<Theory(Skip="Not impl")>]
-    [<ClassData(typeof<FolderTestCases>)>]      
-    member this.``no input`` folder =
+    [<Theory(Skip = "Detect project file feature")>]
+    [<ClassData(typeof<TestCases>)>]      
+    member this.``no input`` testCase =
         let cd = Directory.GetCurrentDirectory()
         try     
-            folder |> Directory.SetCurrentDirectory
-            main [| |] |> fileNotEmpty
+            testCase.folder |> Directory.SetCurrentDirectory
+            describe [| |] |> should not' (be NullOrEmptyString)
         finally 
             Directory.SetCurrentDirectory cd 
                             
     [<Fact>]
     member this.``bad file`` () =
         let input = "BadInput.json"
-        let act: Action = new Action(fun () -> main [|input|] |> ignore)
+        let act: Action = new Action(fun () -> describe [|input|] |> ignore)
+        Assert.Throws(typeof<BadImageFormatException>, act)     
+                               
+    [<Theory(Skip = "Not implemented")>]
+    [<InlineData("-v")>]
+    [<InlineData("--verbose")>]
+    member this.``verbose log level`` verboseFlag =        
+        let act: Action = new Action(fun () -> describe [| verboseFlag |] |> ignore)
+        Assert.Throws(typeof<BadImageFormatException>, act)
+        
+    [<Fact>]
+    member this.``quiet log level`` () =
+        let input = "BadInput.json"
+        let act: Action = new Action(fun () -> describe [|input|] |> ignore)
         Assert.Throws(typeof<BadImageFormatException>, act)
 
 type DotApiIntegrationTests() =    
-    let main = Program.mainUnsafeWith ignore
+    let describe = Program.mainUnsafeWith ignore
     
     [<Fact>]
     member this.``version`` () =
-        "version"
-        |> Array.singleton
-        |> main
-        |> should not' (be NullOrEmptyString)
+        let result = 
+            "version"
+            |> Array.singleton
+            |> describe
+            
+        result |> should not' (be NullOrEmptyString)
+        result |> should not' (equal "0.0.0.0")
         

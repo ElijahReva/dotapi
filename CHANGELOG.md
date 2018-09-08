@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 ### Added
+- Details (-d) param
+- Folder as output type support 
 - Readme
 - Nuke install
 - Describe command
